@@ -23,7 +23,7 @@ pub fn handle_config(matches: ArgMatches) {
             },
             verbose: matches.occurrences_of("verbose") == 1
         };
-        let interp = Interpreter::from_config(&cfg);
+        let mut interp = Interpreter::from_config(&cfg);
         interp.run();
     } else if let Some(info) = matches.subcommand_matches("info") {
         let cfg = CmdConfig {

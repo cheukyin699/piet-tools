@@ -42,7 +42,7 @@ impl OpCode {
 pub struct Interpreter {
     codel_size: usize,
     code: Blocks,
-    stack: Vec<i32>,
+    stack: Vec<i32>,        // TODO: change to use a mutable reference with lifetimes
     dp: Direction,
     cc: Direction,
     finished: bool,
@@ -69,13 +69,13 @@ impl <'a> Interpreter {
         }
     }
 
-    pub fn run(&self) {
+    pub fn run(&mut self) {
         while !self.finished {
             self.step();
         }
     }
 
-    fn step(&self) {
+    fn step(&mut self) {
         let blk = self.code.find_block_from_index(&self.current);
         if blk.t == Type::White {
             self.passthrough_white();
@@ -101,7 +101,7 @@ impl <'a> Interpreter {
     /// not execute if and only if the next block is black.
     ///
     /// This is basically a helper function that deals with the exceptional cases.
-    fn execute_blk(&self, curr_blk: &Block, next_blk: &Block) -> bool {
+    fn execute_blk(&mut self, curr_blk: &Block, next_blk: &Block) -> bool {
         match next_blk.t {
             Type::Black => false,
             Type::White => true,
@@ -116,7 +116,29 @@ impl <'a> Interpreter {
         }
     }
 
-    fn execute(&self, curr_blk: &Block, next_blk: &Block, op: OpCode) {
+    fn execute(&mut self, curr_blk: &Block, next_blk: &Block, op: OpCode) {
+        match op {
+            OpCode::NOP => {},
+            OpCode::PUSH => {
+                self.stack.push(curr_blk.coords.len() as i32);
+            },
+            OpCode::POP => {},
+            OpCode::ADD => {},
+            OpCode::SUB => {},
+            OpCode::MUL => {},
+            OpCode::DIV => {},
+            OpCode::MOD => {},
+            OpCode::NOT => {},
+            OpCode::GT => {},
+            OpCode::PTR => {},
+            OpCode::SWTCH => {},
+            OpCode::DUP => {},
+            OpCode::ROLL => {},
+            OpCode::INPN => {},
+            OpCode::INPC => {},
+            OpCode::OUTN => {},
+            OpCode::OUTC => {},
+        }
     }
 
     fn get_edges(&self, blk: &Block) -> Vec<Coord> {

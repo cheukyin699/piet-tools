@@ -3,11 +3,32 @@ use crate::blocks;
 use crate::cmdconfig::CmdConfig;
 use crate::utils::Coord;
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+#[repr(i32)]
 pub enum Direction {
-    Right,
+    Right = 0,
     Down,
     Left,
     Up
+}
+
+fn rotate_direction(d: Direction, times: i32) -> Direction {
+    match ((d as i32) + times) % 4 {
+        0 => Direction::Right,
+        1 => Direction::Down,
+        2 => Direction::Left,
+        3 => Direction::Up,
+        x => panic!("HOWTF did you manage to get {}???", x)
+    }
+}
+
+fn switch_codel(c: Direction, times: i32) -> Direction {
+    let times = if times < 0 {-times} else {times};
+    if times % 2 == 0 {
+        c
+    } else {
+        if c == Direction::Left {Direction::Right} else {Direction::Left}
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -91,7 +112,7 @@ impl <'a> Interpreter {
         };
         let new_blk = self.code.find_block_from_index(&new_coord);
 
-        self.execute_blk(blk, new_blk);
+        Interpreter::execute_blk(&mut self.stack, &mut self.dp, &mut self.cc, self.verbose, blk, new_blk);
     }
 
     fn passthrough_white(&self) {
@@ -101,13 +122,13 @@ impl <'a> Interpreter {
     /// not execute if and only if the next block is black.
     ///
     /// This is basically a helper function that deals with the exceptional cases.
-    fn execute_blk(&mut self, curr_blk: &Block, next_blk: &Block) -> bool {
+    fn execute_blk(stack: &mut Vec<i32>, dp: &mut Direction, cc: &mut Direction, verbose: bool, curr_blk: &Block, next_blk: &Block) -> bool {
         match next_blk.t {
             Type::Black => false,
             Type::White => true,
             Type::Color(l, h) => {
                 if let Type::Color(l0, h0) = curr_blk.t {
-                    self.execute(curr_blk, next_blk, OpCode::typeof_exec(l0, h0, l, h));
+                    Interpreter::execute(stack, dp, cc, verbose, curr_blk, next_blk, OpCode::typeof_exec(l0, h0, l, h));
                 } else {
                     panic!("Your current block is {:?}, which is impossible", curr_blk.t);
                 }
@@ -116,29 +137,175 @@ impl <'a> Interpreter {
         }
     }
 
-    fn execute(&mut self, curr_blk: &Block, next_blk: &Block, op: OpCode) {
+    fn execute(stack: &mut Vec<i32>, dp: &mut Direction, cc: &mut Direction, verbose: bool, curr_blk: &Block, next_blk: &Block, op: OpCode) -> Option<bool> {
         match op {
             OpCode::NOP => {},
             OpCode::PUSH => {
-                self.stack.push(curr_blk.coords.len() as i32);
+                stack.push(curr_blk.coords.len() as i32);
+                if verbose {
+                    println!("PUSH {:x}", curr_blk.coords.len());
+                }
             },
-            OpCode::POP => {},
-            OpCode::ADD => {},
-            OpCode::SUB => {},
-            OpCode::MUL => {},
-            OpCode::DIV => {},
-            OpCode::MOD => {},
-            OpCode::NOT => {},
-            OpCode::GT => {},
-            OpCode::PTR => {},
-            OpCode::SWTCH => {},
-            OpCode::DUP => {},
-            OpCode::ROLL => {},
-            OpCode::INPN => {},
-            OpCode::INPC => {},
-            OpCode::OUTN => {},
-            OpCode::OUTC => {},
+            OpCode::POP => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                stack.pop();
+                if verbose {
+                    println!("POP");
+                }
+            },
+            OpCode::ADD => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (v1, v2) = (stack.pop()?, stack.pop()?);
+                stack.push(v1 + v2);
+                if verbose {
+                    println!("ADD {:x}, {:x}", v1, v2);
+                }
+            },
+            OpCode::SUB => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (v1, v2) = (stack.pop()?, stack.pop()?);
+                stack.push(v2 - v1);
+                if verbose {
+                    println!("SUB {:x}, {:x}", v2, v1);
+                }
+            },
+            OpCode::MUL => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (v1, v2) = (stack.pop()?, stack.pop()?);
+                stack.push(v1 * v2);
+                if verbose {
+                    println!("MUL {:x}, {:x}", v1, v2);
+                }
+            },
+            OpCode::DIV => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (v1, v2) = (stack.pop()?, stack.pop()?);
+                if v1 != 0 {
+                    stack.push(v2 / v1);
+                    if verbose {
+                        println!("DIV {:x}, {:x}", v2, v1);
+                    }
+                } else {
+                    eprintln!("Dividing by zero; skipping");
+                    stack.push(v2);
+                    stack.push(v1);
+                }
+            },
+            OpCode::MOD => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (v1, v2) = (stack.pop()?, stack.pop()?);
+                if v1 != 0 {
+                    stack.push(v2 % v1);
+                    if verbose {
+                        println!("MOD {:x}, {:x}", v2, v1);
+                    }
+                } else {
+                    eprintln!("Modular arithmetic with zero as base; skipping");
+                    stack.push(v2);
+                    stack.push(v1);
+                }
+            },
+            OpCode::NOT => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let v = stack.pop()?;
+                stack.push(if v == 0 {1} else {0});
+                if verbose {
+                    println!("NOT {:x}", v);
+                }
+            },
+            OpCode::GT => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (v1, v2) = (stack.pop()?, stack.pop()?);
+                stack.push(if v2 > v1 {1} else {0});
+                if verbose {
+                    println!("GT {:x}, {:x}", v2, v1);
+                }
+            },
+            OpCode::PTR => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let v = stack.pop()?;
+                *dp = rotate_direction(dp.clone(), v);
+                if verbose {
+                    println!("PTR {:x}", v);
+                }
+            },
+            OpCode::SWTCH => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let v = stack.pop()?;
+                *cc = switch_codel(cc.clone(), v);
+                if verbose {
+                    println!("SWTCH {:x}", v);
+                }
+            },
+            OpCode::DUP => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let v = stack.pop()?;
+                stack.push(v);
+                stack.push(v);
+                if verbose {
+                    println!("DUP {:x}", v);
+                }
+            },
+            OpCode::ROLL => {
+                if stack.len() < 2 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let (num_rolls, n) = (stack.pop()?, stack.pop()?);
+                if num_rolls < 0 {
+                    return None;
+                }
+                for i in 0..num_rolls {
+                    let top = stack.pop()?;
+                }
+                if verbose {
+                    println!("ROLL num={}, n={}", num_rolls, n);
+                }
+            },
+            OpCode::INPN => {
+            },
+            OpCode::INPC => {
+            },
+            OpCode::OUTN => {
+            },
+            OpCode::OUTC => {
+            },
         }
+
+        None
     }
 
     fn get_edges(&self, blk: &Block) -> Vec<Coord> {

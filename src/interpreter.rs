@@ -90,6 +90,8 @@ impl <'a> Interpreter {
             Direction::Up => (*choose_x, *choose_y - 1)
         };
         let new_blk = self.code.find_block_from_index(&new_coord);
+
+        self.execute_blk(blk, new_blk);
     }
 
     fn passthrough_white(&self) {
@@ -97,14 +99,24 @@ impl <'a> Interpreter {
 
     /// Executes the transition between blocks. Returns true if the block executes. The block does
     /// not execute if and only if the next block is black.
+    ///
+    /// This is basically a helper function that deals with the exceptional cases.
     fn execute_blk(&self, curr_blk: &Block, next_blk: &Block) -> bool {
-        match &next_blk.t {
+        match next_blk.t {
             Type::Black => false,
             Type::White => true,
             Type::Color(l, h) => {
+                if let Type::Color(l0, h0) = curr_blk.t {
+                    self.execute(curr_blk, next_blk, OpCode::typeof_exec(l0, h0, l, h));
+                } else {
+                    panic!("Your current block is {:?}, which is impossible", curr_blk.t);
+                }
                 true
             }
         }
+    }
+
+    fn execute(&self, curr_blk: &Block, next_blk: &Block, op: OpCode) {
     }
 
     fn get_edges(&self, blk: &Block) -> Vec<Coord> {

@@ -4,13 +4,13 @@ use std::collections::{HashSet, HashMap};
 use std::io;
 use crate::utils::Coord;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq)]
 #[repr(u8)]
 pub enum Hue {
     Red = 0, Yellow, Green, Cyan, Blue, Magenta
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq)]
 #[repr(u8)]
 pub enum Lightness {
     Light = 0, Normal, Dark

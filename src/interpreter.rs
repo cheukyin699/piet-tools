@@ -1,12 +1,42 @@
-use crate::blocks::Blocks;
+use crate::blocks::{Type, Block, Blocks};
+use crate::blocks;
 use crate::cmdconfig::CmdConfig;
 use crate::utils::Coord;
 
-enum Direction {
+pub enum Direction {
     Right,
     Down,
     Left,
     Up
+}
+
+#[derive(Clone, Copy)]
+enum OpCode {
+    NOP, PUSH, POP,
+    ADD, SUB, MUL,
+    DIV, MOD, NOT,
+    GT, PTR, SWTCH,
+    DUP, ROLL, INPN,
+    INPC, OUTN, OUTC
+}
+
+impl OpCode {
+    const OPCODE_TABLE: [[OpCode; 3]; 6] = [
+        [OpCode::NOP, OpCode::PUSH, OpCode::POP],
+        [OpCode::ADD, OpCode::SUB, OpCode::MUL],
+        [OpCode::DIV, OpCode::MOD, OpCode::NOT],
+        [OpCode::GT, OpCode::PTR, OpCode::SWTCH],
+        [OpCode::DUP, OpCode::ROLL, OpCode::INPN],
+        [OpCode::INPC, OpCode::OUTN, OpCode::OUTC]
+    ];
+
+    pub fn typeof_exec(light0: blocks::Lightness, hue0: blocks::Hue,
+        light1: blocks::Lightness, hue1: blocks::Hue) -> OpCode {
+        let light_delta: usize = (((light1 as i8) - (light0 as i8)) % 3) as usize;
+        let hue_delta: usize = (((hue1 as i8) - (hue0 as i8)) % 6) as usize;
+
+        OpCode::OPCODE_TABLE[hue_delta][light_delta]
+    }
 }
 
 pub struct Interpreter {
@@ -46,6 +76,44 @@ impl <'a> Interpreter {
     }
 
     fn step(&self) {
+        let blk = self.code.find_block_from_index(&self.current);
+        if blk.t == Type::White {
+            self.passthrough_white();
+            return;
+        }
+        let edges = self.get_edges(blk);
+        let (choose_x, choose_y) = self.choose_coord(&edges);
+        let new_coord = match self.dp {
+            Direction::Right => (*choose_x + 1, *choose_y),
+            Direction::Down => (*choose_x, *choose_y - 1),
+            Direction::Left => (*choose_x - 1, *choose_y),
+            Direction::Up => (*choose_x, *choose_y - 1)
+        };
+        let new_blk = self.code.find_block_from_index(&new_coord);
+    }
+
+    fn passthrough_white(&self) {
+    }
+
+    /// Executes the transition between blocks. Returns true if the block executes. The block does
+    /// not execute if and only if the next block is black.
+    fn execute_blk(&self, curr_blk: &Block, next_blk: &Block) -> bool {
+        match &next_blk.t {
+            Type::Black => false,
+            Type::White => true,
+            Type::Color(l, h) => {
+                true
+            }
+        }
+    }
+
+    fn get_edges(&self, blk: &Block) -> Vec<Coord> {
+        blk.coords.iter().cloned().collect()
+    }
+
+    fn choose_coord(&'a self, edges: &'a Vec<Coord>) -> &'a Coord {
+        // TODO: implement that table!
+        edges.first().unwrap()
     }
 
     pub fn info(&self) {

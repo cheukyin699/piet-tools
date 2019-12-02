@@ -5,13 +5,13 @@ use std::io;
 use crate::utils::Coord;
 
 #[derive(Debug, PartialEq, Eq)]
-#[repr(u32)]
+#[repr(u8)]
 pub enum Hue {
     Red = 0, Yellow, Green, Cyan, Blue, Magenta
 }
 
 #[derive(Debug, PartialEq, Eq)]
-#[repr(u32)]
+#[repr(u8)]
 pub enum Lightness {
     Light = 0, Normal, Dark
 }
@@ -74,7 +74,7 @@ pub struct Blocks {
     blkLookup: HashMap<Coord, usize>
 }
 
-impl Blocks {
+impl <'a> Blocks {
     pub fn len(&self) -> usize {
         self.blocks.len()
     }
@@ -117,5 +117,9 @@ impl Blocks {
         }
 
         Ok(Blocks {blocks: blocks, blkLookup: lookup})
+    }
+
+    pub fn find_block_from_index(&'a self, crd: &Coord) -> &'a Block {
+        self.blocks.get(self.blkLookup[crd]).unwrap()
     }
 }

@@ -2,6 +2,7 @@ use crate::blocks::{Type, Block, Blocks};
 use crate::blocks;
 use crate::cmdconfig::CmdConfig;
 use crate::utils::Coord;
+use std::io;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 #[repr(i32)]
@@ -143,7 +144,7 @@ impl <'a> Interpreter {
             OpCode::PUSH => {
                 stack.push(curr_blk.coords.len() as i32);
                 if verbose {
-                    println!("PUSH {:x}", curr_blk.coords.len());
+                    eprintln!("PUSH {:x}", curr_blk.coords.len());
                 }
             },
             OpCode::POP => {
@@ -153,7 +154,7 @@ impl <'a> Interpreter {
                 }
                 stack.pop();
                 if verbose {
-                    println!("POP");
+                    eprintln!("POP");
                 }
             },
             OpCode::ADD => {
@@ -164,7 +165,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(v1 + v2);
                 if verbose {
-                    println!("ADD {:x}, {:x}", v1, v2);
+                    eprintln!("ADD {:x}, {:x}", v1, v2);
                 }
             },
             OpCode::SUB => {
@@ -175,7 +176,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(v2 - v1);
                 if verbose {
-                    println!("SUB {:x}, {:x}", v2, v1);
+                    eprintln!("SUB {:x}, {:x}", v2, v1);
                 }
             },
             OpCode::MUL => {
@@ -186,7 +187,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(v1 * v2);
                 if verbose {
-                    println!("MUL {:x}, {:x}", v1, v2);
+                    eprintln!("MUL {:x}, {:x}", v1, v2);
                 }
             },
             OpCode::DIV => {
@@ -198,7 +199,7 @@ impl <'a> Interpreter {
                 if v1 != 0 {
                     stack.push(v2 / v1);
                     if verbose {
-                        println!("DIV {:x}, {:x}", v2, v1);
+                        eprintln!("DIV {:x}, {:x}", v2, v1);
                     }
                 } else {
                     eprintln!("Dividing by zero; skipping");
@@ -215,7 +216,7 @@ impl <'a> Interpreter {
                 if v1 != 0 {
                     stack.push(v2 % v1);
                     if verbose {
-                        println!("MOD {:x}, {:x}", v2, v1);
+                        eprintln!("MOD {:x}, {:x}", v2, v1);
                     }
                 } else {
                     eprintln!("Modular arithmetic with zero as base; skipping");
@@ -231,7 +232,7 @@ impl <'a> Interpreter {
                 let v = stack.pop()?;
                 stack.push(if v == 0 {1} else {0});
                 if verbose {
-                    println!("NOT {:x}", v);
+                    eprintln!("NOT {:x}", v);
                 }
             },
             OpCode::GT => {
@@ -242,7 +243,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(if v2 > v1 {1} else {0});
                 if verbose {
-                    println!("GT {:x}, {:x}", v2, v1);
+                    eprintln!("GT {:x}, {:x}", v2, v1);
                 }
             },
             OpCode::PTR => {
@@ -253,7 +254,7 @@ impl <'a> Interpreter {
                 let v = stack.pop()?;
                 *dp = rotate_direction(dp.clone(), v);
                 if verbose {
-                    println!("PTR {:x}", v);
+                    eprintln!("PTR {:x}", v);
                 }
             },
             OpCode::SWTCH => {
@@ -264,7 +265,7 @@ impl <'a> Interpreter {
                 let v = stack.pop()?;
                 *cc = switch_codel(cc.clone(), v);
                 if verbose {
-                    println!("SWTCH {:x}", v);
+                    eprintln!("SWTCH {:x}", v);
                 }
             },
             OpCode::DUP => {
@@ -276,7 +277,7 @@ impl <'a> Interpreter {
                 stack.push(v);
                 stack.push(v);
                 if verbose {
-                    println!("DUP {:x}", v);
+                    eprintln!("DUP {:x}", v);
                 }
             },
             OpCode::ROLL => {
@@ -285,23 +286,76 @@ impl <'a> Interpreter {
                     return None;
                 }
                 let (num_rolls, n) = (stack.pop()?, stack.pop()?);
-                if num_rolls < 0 {
+                if num_rolls < 0 || stack.len() < n as usize {
                     return None;
                 }
-                for i in 0..num_rolls {
-                    let top = stack.pop()?;
+                // Copied from https://github.com/tessi/rpiet/blob/master/src/command.rs#L267,
+                // because I don't know what I am doing with this command
+                let num_rolls = num_rolls % n;
+                let mut substack: Vec<_> = stack.drain(stack.len() - (n as usize)..).collect();
+                if num_rolls > 0 {
+                    substack.rotate_right(num_rolls as usize);
+                } else {
+                    substack.rotate_left(-num_rolls as usize);
                 }
+                stack.append(&mut substack);
                 if verbose {
-                    println!("ROLL num={}, n={}", num_rolls, n);
+                    eprintln!("ROLL num={}, n={}", num_rolls, n);
                 }
             },
             OpCode::INPN => {
+                let mut line: String = "".to_string();
+                let stdin = io::stdin();
+                match stdin.read_line(&mut line) {
+                    Ok(_) => stack.push(match line.parse() {
+                        Ok(num) => {
+                            if verbose {
+                                eprintln!("INPN {}", line);
+                            }
+                            num
+                        },
+                        Err(_) => {
+                            eprintln!("Couldn't parse input '{}'", line);
+                            return None
+                        }
+                    }),
+                    Err(_) => eprintln!("Couldn't parse input")
+                }
             },
             OpCode::INPC => {
+                let mut line: String = "".to_string();
+                let stdin = io::stdin();
+                match stdin.read_line(&mut line) {
+                    Ok(_) => {
+                        if verbose {
+                            eprintln!("INPC {}", line);
+                        }
+                        stack.push(line.as_bytes()[0] as i32)
+                    },
+                    Err(_) => eprintln!("Couldn't parse input")
+                }
             },
             OpCode::OUTN => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let n = stack.pop()?;
+                print!("{}", n);
+                if verbose {
+                    eprintln!("OUTN {}", n);
+                }
             },
             OpCode::OUTC => {
+                if stack.len() < 1 {
+                    eprintln!("Not enough values to pop; skipping");
+                    return None;
+                }
+                let n = stack.pop()?;
+                print!("{}", n as u8 as char);
+                if verbose {
+                    eprintln!("OUTN {}", n);
+                }
             },
         }
 
@@ -309,6 +363,7 @@ impl <'a> Interpreter {
     }
 
     fn get_edges(&self, blk: &Block) -> Vec<Coord> {
+        // TODO: implement getting the edge codels
         blk.coords.iter().cloned().collect()
     }
 

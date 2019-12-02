@@ -1,16 +1,19 @@
 use image::io::Reader;
 use image::ImageRgb8;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::io;
+use crate::utils::Coord;
 
 #[derive(Debug, PartialEq, Eq)]
+#[repr(u32)]
 pub enum Hue {
-    Red, Yellow, Green, Cyan, Blue, Magenta
+    Red = 0, Yellow, Green, Cyan, Blue, Magenta
 }
 
 #[derive(Debug, PartialEq, Eq)]
+#[repr(u32)]
 pub enum Lightness {
-    Light, Normal, Dark
+    Light = 0, Normal, Dark
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -19,8 +22,6 @@ pub enum Type {
     Black,
     White
 }
-
-type Coord = (i32, i32);
 
 pub fn to_blocktype(color: &[u8; 3]) -> Type {
     match color {
@@ -66,42 +67,55 @@ impl Block {
         self.coords.contains(left) || self.coords.contains(right) ||
             self.coords.contains(up) || self.coords.contains(down)
     }
-
-    // pub fn from_pixel(
 }
 
-pub fn blocks_from_file(filename: &str, codel_size: usize) -> Result<Vec<Block>, io::Error> {
-    let img = Reader::open(filename)?.decode().unwrap();
-    let mut blocks: Vec<Block> = vec![];
+pub struct Blocks {
+    blocks: Vec<Block>,
+    blkLookup: HashMap<Coord, usize>
+}
 
-    let img = match img {
-        ImageRgb8(rgb8) => rgb8,
-        _ => panic!("Invalid image type")
-    };
-
-    let (w, h) = img.dimensions();
-
-    // Add coordinates to the blocks
-    for x in (0..w).step_by(codel_size) {
-        for y in (0..h).step_by(codel_size) {
-            let p = img.get_pixel(x, y);
-            let t = to_blocktype(&[p[0], p[1], p[2]]);
-            let coord: Coord = (x as i32, y as i32);
-            let mut found = false;
-            for i in 0..blocks.len() {
-                if blocks[i].t == t && blocks[i].is_next_to(coord) {
-                    blocks[i].coords.insert(coord);
-                    found = true;
-                }
-            }
-
-            if !found {
-                let mut hs: HashSet<Coord> = HashSet::new();
-                hs.insert(coord);
-                blocks.push(Block {t: t, coords: hs});
-            }
-        }
+impl Blocks {
+    pub fn len(&self) -> usize {
+        self.blocks.len()
     }
 
-    Ok(blocks)
+    pub fn from_file(filename: &str, codel_size: usize) -> Result<Blocks, io::Error> {
+        let img = Reader::open(filename)?.decode().unwrap();
+        let mut blocks: Vec<Block> = vec![];
+        let mut lookup: HashMap<Coord, usize> = HashMap::new();
+
+        let img = match img {
+            ImageRgb8(rgb8) => rgb8,
+            _ => panic!("Invalid image type")
+        };
+
+        let (w, h) = img.dimensions();
+
+        // Add coordinates to the blocks
+        for x in (0..w).step_by(codel_size) {
+            for y in (0..h).step_by(codel_size) {
+                let p = img.get_pixel(x, y);
+                let t = to_blocktype(&[p[0], p[1], p[2]]);
+                let coord: Coord = (x as i32, y as i32);
+                let mut found = false;
+                for i in 0..blocks.len() {
+                    if blocks[i].t == t && blocks[i].is_next_to(coord) {
+                        blocks[i].coords.insert(coord);
+                        lookup.insert(coord, i);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if !found {
+                    let mut hs: HashSet<Coord> = HashSet::new();
+                    hs.insert(coord);
+                    blocks.push(Block {t: t, coords: hs});
+                    lookup.insert(coord, blocks.len() - 1);
+                }
+            }
+        }
+
+        Ok(Blocks {blocks: blocks, blkLookup: lookup})
+    }
 }

@@ -128,9 +128,6 @@ impl <'a> Interpreter {
             Some(blk) => blk,
             None => return false
         };
-        if new_blk.t == Type::White {
-            return self.passthrough_white();
-        }
 
         let success = Interpreter::execute_blk(&mut self.stack, &mut self.dp, &mut self.cc, self.verbose, blk, new_blk);
         if success {
@@ -183,7 +180,7 @@ impl <'a> Interpreter {
                 }
                 true
             }
-            _ => panic!("This is a white thing, meaning you should never see this message!")
+            Type::White => true
         }
     }
 

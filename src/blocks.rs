@@ -1,5 +1,4 @@
 use image::io::Reader;
-use image::ImageRgb8;
 use std::collections::{HashSet, HashMap};
 use std::io;
 use crate::utils::Coord;
@@ -84,11 +83,7 @@ impl <'a> Blocks {
         let mut blocks: Vec<Block> = vec![];
         let mut lookup: HashMap<Coord, usize> = HashMap::new();
 
-        let img = match img {
-            ImageRgb8(rgb8) => rgb8,
-            _ => panic!("Invalid image type")
-        };
-
+        let img = img.to_rgb();
         let (w, h) = img.dimensions();
 
         // Add coordinates to the blocks

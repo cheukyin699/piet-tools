@@ -94,6 +94,7 @@ impl <'a> Interpreter {
         while running {
             for i in 0..8 {
                 if self.step() {
+                    // println!("{:?}", self.current);
                     break;
                 }
 
@@ -113,9 +114,6 @@ impl <'a> Interpreter {
 
     fn step(&mut self) -> bool {
         let blk = self.code.find_block_from_index(&self.current).unwrap();
-        if blk.t == Type::White {
-            return self.passthrough_white();
-        }
         let edges = self.get_edges(blk);
         let (choose_x, choose_y) = self.choose_coord(edges);
         let new_coord = match self.dp {
@@ -137,34 +135,6 @@ impl <'a> Interpreter {
         success
     }
 
-    /// Go in the direction of the direction pointer until you can no longer go, or when you hit a
-    /// color block. Returns true if we successfully reach a coloured block, and false if we hit an
-    /// edge or a black block.
-    fn passthrough_white(&mut self) -> bool {
-        loop {
-            let (x, y) = self.current;
-            let new_coord = match self.dp {
-                Direction::Right => (x + self.codel_size, y),
-                Direction::Down => (x, y + self.codel_size),
-                Direction::Left => (x - self.codel_size, y),
-                Direction::Up => (x, y - self.codel_size)
-            };
-            let new_blk = match self.code.find_block_from_index(&new_coord) {
-                Some(blk) => blk,
-                None => return false
-            };
-
-            match new_blk.t {
-                Type::Color(_, _) => {
-                    self.current = new_coord;
-                    return true;
-                },
-                Type::White => self.current = new_coord,
-                Type::Black => return false
-            }
-        }
-    }
-
     /// Executes the transition between blocks. Returns true if the block executes. The block does
     /// not execute if and only if the next block is black.
     ///
@@ -175,7 +145,7 @@ impl <'a> Interpreter {
             Type::Color(l, h) => {
                 if let Type::Color(l0, h0) = curr_blk.t {
                     Interpreter::execute(stack, dp, cc, verbose, curr_blk, OpCode::typeof_exec(l0, h0, l, h));
-                } else {
+                } else if let Type::Black = curr_blk.t {
                     panic!("Your current block is {:?}, which is impossible", curr_blk.t);
                 }
                 true
@@ -404,7 +374,7 @@ impl <'a> Interpreter {
                 let n = stack.pop()?;
                 print!("{}", n as u8 as char);
                 if verbose {
-                    eprintln!("OUTN {}", n);
+                    eprintln!("OUTC 0x{:x}", n);
                 }
             },
         }

@@ -3,7 +3,7 @@ use crate::interpreter::Interpreter;
 
 pub struct CmdConfig <'a> {
     pub src: &'a str,
-    pub size: usize,
+    pub size: i32,
     pub verbose: bool
 }
 

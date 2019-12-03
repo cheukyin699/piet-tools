@@ -79,7 +79,7 @@ impl <'a> Blocks {
         self.blocks.len()
     }
 
-    pub fn from_file(filename: &str, codel_size: usize) -> Result<Blocks, io::Error> {
+    pub fn from_file(filename: &str, codel_size: i32) -> Result<Blocks, io::Error> {
         let img = Reader::open(filename)?.decode().unwrap();
         let mut blocks: Vec<Block> = vec![];
         let mut lookup: HashMap<Coord, usize> = HashMap::new();
@@ -92,8 +92,8 @@ impl <'a> Blocks {
         let (w, h) = img.dimensions();
 
         // Add coordinates to the blocks
-        for x in (0..w).step_by(codel_size) {
-            for y in (0..h).step_by(codel_size) {
+        for x in (0..w).step_by(codel_size as usize) {
+            for y in (0..h).step_by(codel_size as usize) {
                 let p = img.get_pixel(x, y);
                 let t = to_blocktype(&[p[0], p[1], p[2]]);
                 let coord: Coord = (x as i32, y as i32);

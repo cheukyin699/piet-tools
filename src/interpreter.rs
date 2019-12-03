@@ -62,7 +62,7 @@ impl OpCode {
 }
 
 pub struct Interpreter {
-    codel_size: usize,
+    codel_size: i32,
     code: Blocks,
     stack: Vec<i32>,
     dp: Direction,
@@ -114,21 +114,23 @@ impl <'a> Interpreter {
     fn step(&mut self) -> bool {
         let blk = self.code.find_block_from_index(&self.current).unwrap();
         if blk.t == Type::White {
-            self.passthrough_white();
-            return true;
+            return self.passthrough_white();
         }
         let edges = self.get_edges(blk);
         let (choose_x, choose_y) = self.choose_coord(edges);
         let new_coord = match self.dp {
-            Direction::Right => (choose_x + 1, choose_y),
-            Direction::Down => (choose_x, choose_y + 1),
-            Direction::Left => (choose_x - 1, choose_y),
-            Direction::Up => (choose_x, choose_y - 1)
+            Direction::Right => (choose_x + self.codel_size, choose_y),
+            Direction::Down => (choose_x, choose_y + self.codel_size),
+            Direction::Left => (choose_x - self.codel_size, choose_y),
+            Direction::Up => (choose_x, choose_y - self.codel_size)
         };
         let new_blk = match self.code.find_block_from_index(&new_coord) {
             Some(blk) => blk,
             None => return false
         };
+        if new_blk.t == Type::White {
+            return self.passthrough_white();
+        }
 
         let success = Interpreter::execute_blk(&mut self.stack, &mut self.dp, &mut self.cc, self.verbose, blk, new_blk);
         if success {
@@ -138,8 +140,32 @@ impl <'a> Interpreter {
         success
     }
 
-    fn passthrough_white(&self) {
-        panic!("Not implemented!");
+    /// Go in the direction of the direction pointer until you can no longer go, or when you hit a
+    /// color block. Returns true if we successfully reach a coloured block, and false if we hit an
+    /// edge or a black block.
+    fn passthrough_white(&mut self) -> bool {
+        loop {
+            let (x, y) = self.current;
+            let new_coord = match self.dp {
+                Direction::Right => (x + self.codel_size, y),
+                Direction::Down => (x, y + self.codel_size),
+                Direction::Left => (x - self.codel_size, y),
+                Direction::Up => (x, y - self.codel_size)
+            };
+            let new_blk = match self.code.find_block_from_index(&new_coord) {
+                Some(blk) => blk,
+                None => return false
+            };
+
+            match new_blk.t {
+                Type::Color(_, _) => {
+                    self.current = new_coord;
+                    return true;
+                },
+                Type::White => self.current = new_coord,
+                Type::Black => return false
+            }
+        }
     }
 
     /// Executes the transition between blocks. Returns true if the block executes. The block does
@@ -151,7 +177,7 @@ impl <'a> Interpreter {
             Type::Black => false,
             Type::Color(l, h) => {
                 if let Type::Color(l0, h0) = curr_blk.t {
-                    Interpreter::execute(stack, dp, cc, verbose, curr_blk, next_blk, OpCode::typeof_exec(l0, h0, l, h));
+                    Interpreter::execute(stack, dp, cc, verbose, curr_blk, OpCode::typeof_exec(l0, h0, l, h));
                 } else {
                     panic!("Your current block is {:?}, which is impossible", curr_blk.t);
                 }
@@ -161,7 +187,7 @@ impl <'a> Interpreter {
         }
     }
 
-    fn execute(stack: &mut Vec<i32>, dp: &mut Direction, cc: &mut Direction, verbose: bool, curr_blk: &Block, next_blk: &Block, op: OpCode) -> Option<bool> {
+    fn execute(stack: &mut Vec<i32>, dp: &mut Direction, cc: &mut Direction, verbose: bool, curr_blk: &Block, op: OpCode) -> Option<bool> {
         match op {
             OpCode::NOP => {
                 if verbose {

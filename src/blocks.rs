@@ -70,8 +70,8 @@ impl Block {
 }
 
 pub struct Blocks {
-    blocks: Vec<Block>,
-    blkLookup: HashMap<Coord, usize>
+    pub blocks: Vec<Block>,
+    blk_lookup: HashMap<Coord, usize>
 }
 
 impl <'a> Blocks {
@@ -98,28 +98,46 @@ impl <'a> Blocks {
                 let t = to_blocktype(&[p[0], p[1], p[2]]);
                 let coord: Coord = (x as i32, y as i32);
                 let mut found = false;
-                for i in 0..blocks.len() {
-                    if blocks[i].t == t && blocks[i].is_next_to(coord) {
+                let mut found_block = 0;
+                let mut i = 0;
+                while i < blocks.len() {
+                    if !found && blocks[i].t == t && blocks[i].is_next_to(coord) {
                         blocks[i].coords.insert(coord);
-                        lookup.insert(coord, i);
                         found = true;
-                        break;
+                        found_block = i;
+                    } else if found && blocks[i].t == t && blocks[i].is_next_to(coord) {
+                        // We can join these two blocks
+                        // Join them without using the join function, because Rust likes to
+                        // invalidate and delete references that were removed and deleted
+                        for crd in blocks[i].coords.clone().iter() {
+                            let crd = crd.clone();
+                            blocks[found_block].coords.insert(crd);
+                        }
+                        blocks.remove(i);
+                        continue;
                     }
+                    i += 1;
                 }
 
                 if !found {
                     let mut hs: HashSet<Coord> = HashSet::new();
                     hs.insert(coord);
                     blocks.push(Block {t: t, coords: hs});
-                    lookup.insert(coord, blocks.len() - 1);
                 }
             }
         }
 
-        Ok(Blocks {blocks: blocks, blkLookup: lookup})
+        // Populate the lookup table
+        for (i, b) in blocks.iter().enumerate() {
+            for crd in b.coords.iter() {
+                lookup.insert(crd.clone(), i);
+            }
+        }
+
+        Ok(Blocks {blocks: blocks, blk_lookup: lookup})
     }
 
-    pub fn find_block_from_index(&'a self, crd: &Coord) -> &'a Block {
-        self.blocks.get(self.blkLookup[crd]).unwrap()
+    pub fn find_block_from_index(&'a self, crd: &Coord) -> Option<&'a Block> {
+        self.blocks.get(*self.blk_lookup.get(crd)?)
     }
 }

@@ -4,7 +4,7 @@ use crate::cmdconfig::CmdConfig;
 use crate::utils::Coord;
 use std::io;
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(i32)]
 pub enum Direction {
     Right = 0,
@@ -32,7 +32,7 @@ fn switch_codel(c: Direction, times: i32) -> Direction {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum OpCode {
     NOP, PUSH, POP,
     ADD, SUB, MUL,
@@ -54,20 +54,19 @@ impl OpCode {
 
     pub fn typeof_exec(light0: blocks::Lightness, hue0: blocks::Hue,
         light1: blocks::Lightness, hue1: blocks::Hue) -> OpCode {
-        let light_delta: usize = (((light1 as i8) - (light0 as i8)) % 3) as usize;
-        let hue_delta: usize = (((hue1 as i8) - (hue0 as i8)) % 6) as usize;
+        let light_delta = ((light1 as i8) - (light0 as i8) + 3) % 3;
+        let hue_delta = ((hue1 as i8) - (hue0 as i8) + 6) % 6;
 
-        OpCode::OPCODE_TABLE[hue_delta][light_delta]
+        OpCode::OPCODE_TABLE[hue_delta as usize][light_delta as usize]
     }
 }
 
 pub struct Interpreter {
     codel_size: usize,
     code: Blocks,
-    stack: Vec<i32>,        // TODO: change to use a mutable reference with lifetimes
+    stack: Vec<i32>,
     dp: Direction,
     cc: Direction,
-    finished: bool,
     current: Coord,
 
     verbose: bool
@@ -82,7 +81,6 @@ impl <'a> Interpreter {
                 stack: vec![],
                 dp: Direction::Right,
                 cc: Direction::Left,
-                finished: false,
                 current: (0, 0),
 
                 verbose: cfg.verbose
@@ -92,31 +90,56 @@ impl <'a> Interpreter {
     }
 
     pub fn run(&mut self) {
-        while !self.finished {
-            self.step();
+        let mut running = true;
+        while running {
+            for i in 0..8 {
+                if self.step() {
+                    break;
+                }
+
+                if i % 2 == 0 {
+                    self.cc = switch_codel(self.cc, 1);
+                }
+                if i % 2 == 1 {
+                    self.dp = rotate_direction(self.dp, 1);
+                }
+
+                if i == 7 {
+                    running = false;
+                }
+            }
         }
     }
 
-    fn step(&mut self) {
-        let blk = self.code.find_block_from_index(&self.current);
+    fn step(&mut self) -> bool {
+        let blk = self.code.find_block_from_index(&self.current).unwrap();
         if blk.t == Type::White {
             self.passthrough_white();
-            return;
+            return true;
         }
         let edges = self.get_edges(blk);
-        let (choose_x, choose_y) = self.choose_coord(&edges);
+        let (choose_x, choose_y) = self.choose_coord(edges);
         let new_coord = match self.dp {
-            Direction::Right => (*choose_x + 1, *choose_y),
-            Direction::Down => (*choose_x, *choose_y - 1),
-            Direction::Left => (*choose_x - 1, *choose_y),
-            Direction::Up => (*choose_x, *choose_y - 1)
+            Direction::Right => (choose_x + 1, choose_y),
+            Direction::Down => (choose_x, choose_y + 1),
+            Direction::Left => (choose_x - 1, choose_y),
+            Direction::Up => (choose_x, choose_y - 1)
         };
-        let new_blk = self.code.find_block_from_index(&new_coord);
+        let new_blk = match self.code.find_block_from_index(&new_coord) {
+            Some(blk) => blk,
+            None => return false
+        };
 
-        Interpreter::execute_blk(&mut self.stack, &mut self.dp, &mut self.cc, self.verbose, blk, new_blk);
+        let success = Interpreter::execute_blk(&mut self.stack, &mut self.dp, &mut self.cc, self.verbose, blk, new_blk);
+        if success {
+            if self.current == new_coord {return false;}
+            self.current = new_coord;
+        }
+        success
     }
 
     fn passthrough_white(&self) {
+        panic!("Not implemented!");
     }
 
     /// Executes the transition between blocks. Returns true if the block executes. The block does
@@ -126,7 +149,6 @@ impl <'a> Interpreter {
     fn execute_blk(stack: &mut Vec<i32>, dp: &mut Direction, cc: &mut Direction, verbose: bool, curr_blk: &Block, next_blk: &Block) -> bool {
         match next_blk.t {
             Type::Black => false,
-            Type::White => true,
             Type::Color(l, h) => {
                 if let Type::Color(l0, h0) = curr_blk.t {
                     Interpreter::execute(stack, dp, cc, verbose, curr_blk, next_blk, OpCode::typeof_exec(l0, h0, l, h));
@@ -135,16 +157,21 @@ impl <'a> Interpreter {
                 }
                 true
             }
+            _ => panic!("This is a white thing, meaning you should never see this message!")
         }
     }
 
     fn execute(stack: &mut Vec<i32>, dp: &mut Direction, cc: &mut Direction, verbose: bool, curr_blk: &Block, next_blk: &Block, op: OpCode) -> Option<bool> {
         match op {
-            OpCode::NOP => {},
+            OpCode::NOP => {
+                if verbose {
+                    eprintln!("NOP");
+                }
+            },
             OpCode::PUSH => {
                 stack.push(curr_blk.coords.len() as i32);
                 if verbose {
-                    eprintln!("PUSH {:x}", curr_blk.coords.len());
+                    eprintln!("PUSH 0x{:x}", curr_blk.coords.len());
                 }
             },
             OpCode::POP => {
@@ -165,7 +192,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(v1 + v2);
                 if verbose {
-                    eprintln!("ADD {:x}, {:x}", v1, v2);
+                    eprintln!("ADD 0x{:x}, 0x{:x}", v1, v2);
                 }
             },
             OpCode::SUB => {
@@ -176,7 +203,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(v2 - v1);
                 if verbose {
-                    eprintln!("SUB {:x}, {:x}", v2, v1);
+                    eprintln!("SUB 0x{:x}, 0x{:x}", v2, v1);
                 }
             },
             OpCode::MUL => {
@@ -187,7 +214,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(v1 * v2);
                 if verbose {
-                    eprintln!("MUL {:x}, {:x}", v1, v2);
+                    eprintln!("MUL 0x{:x}, 0x{:x}", v1, v2);
                 }
             },
             OpCode::DIV => {
@@ -199,7 +226,7 @@ impl <'a> Interpreter {
                 if v1 != 0 {
                     stack.push(v2 / v1);
                     if verbose {
-                        eprintln!("DIV {:x}, {:x}", v2, v1);
+                        eprintln!("DIV 0x{:x}, 0x{:x}", v2, v1);
                     }
                 } else {
                     eprintln!("Dividing by zero; skipping");
@@ -216,7 +243,7 @@ impl <'a> Interpreter {
                 if v1 != 0 {
                     stack.push(v2 % v1);
                     if verbose {
-                        eprintln!("MOD {:x}, {:x}", v2, v1);
+                        eprintln!("MOD 0x{:x}, 0x{:x}", v2, v1);
                     }
                 } else {
                     eprintln!("Modular arithmetic with zero as base; skipping");
@@ -232,7 +259,7 @@ impl <'a> Interpreter {
                 let v = stack.pop()?;
                 stack.push(if v == 0 {1} else {0});
                 if verbose {
-                    eprintln!("NOT {:x}", v);
+                    eprintln!("NOT 0x{:x}", v);
                 }
             },
             OpCode::GT => {
@@ -243,7 +270,7 @@ impl <'a> Interpreter {
                 let (v1, v2) = (stack.pop()?, stack.pop()?);
                 stack.push(if v2 > v1 {1} else {0});
                 if verbose {
-                    eprintln!("GT {:x}, {:x}", v2, v1);
+                    eprintln!("GT 0x{:x}, 0x{:x}", v2, v1);
                 }
             },
             OpCode::PTR => {
@@ -254,7 +281,7 @@ impl <'a> Interpreter {
                 let v = stack.pop()?;
                 *dp = rotate_direction(dp.clone(), v);
                 if verbose {
-                    eprintln!("PTR {:x}", v);
+                    eprintln!("PTR 0x{:x}", v);
                 }
             },
             OpCode::SWTCH => {
@@ -265,7 +292,7 @@ impl <'a> Interpreter {
                 let v = stack.pop()?;
                 *cc = switch_codel(cc.clone(), v);
                 if verbose {
-                    eprintln!("SWTCH {:x}", v);
+                    eprintln!("SWTCH 0x{:x}", v);
                 }
             },
             OpCode::DUP => {
@@ -277,7 +304,7 @@ impl <'a> Interpreter {
                 stack.push(v);
                 stack.push(v);
                 if verbose {
-                    eprintln!("DUP {:x}", v);
+                    eprintln!("DUP 0x{:x}", v);
                 }
             },
             OpCode::ROLL => {
@@ -363,17 +390,74 @@ impl <'a> Interpreter {
     }
 
     fn get_edges(&self, blk: &Block) -> Vec<Coord> {
-        // TODO: implement getting the edge codels
-        blk.coords.iter().cloned().collect()
+        match self.dp {
+            Direction::Right => {
+                // Greatest x value fixed
+                let (fixed_x, _): Coord = blk.coords.iter().max_by_key(|(x, _)| x).unwrap().clone();
+                blk.coords.iter().filter_map(|(x, y)| if fixed_x == *x {
+                    Some((x.clone(), y.clone()))
+                } else {
+                    None
+                }).collect::<Vec<Coord>>()
+            },
+            Direction::Down => {
+                // Greatest y value fixed
+                let (_, fixed_y): Coord = blk.coords.iter().max_by_key(|(_, y)| y).unwrap().clone();
+                blk.coords.iter().filter_map(|(x, y)| if fixed_y == *y {
+                    Some((x.clone(), y.clone()))
+                } else {
+                    None
+                }).collect::<Vec<Coord>>()
+            },
+            Direction::Left => {
+                // Smallest x value fixed
+                let (fixed_x, _): Coord = blk.coords.iter().min_by_key(|(x, _)| x).unwrap().clone();
+                blk.coords.iter().filter_map(|(x, y)| if fixed_x == *x {
+                    Some((x.clone(), y.clone()))
+                } else {
+                    None
+                }).collect::<Vec<Coord>>()
+            },
+            Direction::Up => {
+                // Smallest y value fixed
+                let (_, fixed_y): Coord = blk.coords.iter().min_by_key(|(_, y)| y).unwrap().clone();
+                blk.coords.iter().filter_map(|(x, y)| if fixed_y == *y {
+                    Some((x.clone(), y.clone()))
+                } else {
+                    None
+                }).collect::<Vec<Coord>>()
+            },
+        }
     }
 
-    fn choose_coord(&'a self, edges: &'a Vec<Coord>) -> &'a Coord {
-        // TODO: implement that table!
-        edges.first().unwrap()
+    fn choose_coord(&self, edges: Vec<Coord>) -> Coord {
+        let mut edges = edges;
+        edges.sort_by_key(|(x, y)| match self.dp {
+            Direction::Left | Direction::Right => *y,
+            Direction::Up | Direction::Down => *x,
+        });
+        match self.dp {
+            Direction::Up | Direction::Right => if self.cc == Direction::Left {
+                edges.first().unwrap().clone()
+            } else {
+                edges.last().unwrap().clone()
+            },
+            Direction::Left | Direction::Down => if self.cc == Direction::Left {
+                edges.last().unwrap().clone()
+            } else {
+                edges.first().unwrap().clone()
+            }
+        }
     }
 
     pub fn info(&self) {
         println!("Total number of blocks: {}", self.code.len());
         println!("Codel size: {}", self.codel_size);
+        let mut codels = 0;
+        for (i, b) in self.code.blocks.iter().enumerate() {
+            println!("Block #{}: type={:?}, codels={:?}", i, b.t, b.coords.len());
+            codels += b.coords.len();
+        }
+        println!("# of codels: {}", codels);
     }
 }

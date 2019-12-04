@@ -94,7 +94,6 @@ impl <'a> Interpreter {
         while running {
             for i in 0..8 {
                 if self.step() {
-                    // println!("{:?}", self.current);
                     break;
                 }
 

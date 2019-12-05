@@ -15,7 +15,7 @@ pub enum Lightness {
     Light = 0, Normal, Dark
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     Color(Lightness, Hue),
     Black,
@@ -55,6 +55,16 @@ pub struct Block {
     pub coords: HashSet<Coord>
 }
 
+/// A viewable block is meant for when you want to **not** incur the cost of copying an actual
+/// block, but still want to get an immutable borrow (why would you want a mutable one??), and
+/// don't want to mess up the whole mutable/immutable borrow thing down the line. Does not have any
+/// of the coordinates of an actual block.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewableBlock {
+    pub t: Type,
+    pub num: usize
+}
+
 impl Block {
     pub fn is_next_to(&self, other: Coord) -> bool {
         let (x, y) = other;
@@ -66,10 +76,17 @@ impl Block {
         self.coords.contains(left) || self.coords.contains(right) ||
             self.coords.contains(up) || self.coords.contains(down)
     }
+
+    pub fn to_viewableblock(&self) -> ViewableBlock {
+        ViewableBlock {
+            t: self.t,
+            num: self.coords.len()
+        }
+    }
 }
 
 pub struct Blocks {
-    pub blocks: Vec<Block>,
+    blocks: Vec<Block>,
     blk_lookup: HashMap<Coord, usize>
 }
 
@@ -134,5 +151,9 @@ impl <'a> Blocks {
 
     pub fn find_block_from_index(&'a self, crd: &Coord) -> Option<&'a Block> {
         self.blocks.get(*self.blk_lookup.get(crd)?)
+    }
+
+    pub fn count_codels(&self) -> usize {
+        self.blocks.iter().map(|b| b.coords.len()).sum()
     }
 }

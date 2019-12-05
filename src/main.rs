@@ -1,6 +1,7 @@
 mod utils;
 mod cmdconfig;
 mod blocks;
+mod cpu;
 mod interpreter;
 
 use clap::{Arg, App, SubCommand, crate_version, crate_authors};
@@ -11,10 +12,6 @@ fn main() {
         .version(crate_version!())
         .author(crate_authors!())
         .about("A set of tools for the esoteric language Piet")
-        .arg(Arg::with_name("verbose")
-            .short("v")
-            .long("verbose")
-            .help("Output with increased verbosity"))
         .subcommand(SubCommand::with_name("info")
             .arg(Arg::with_name("src")
                 .help("Piet source image file")

@@ -4,7 +4,6 @@ use crate::interpreter::Interpreter;
 pub struct CmdConfig <'a> {
     pub src: &'a str,
     pub size: i32,
-    pub verbose: bool
 }
 
 pub fn handle_config(matches: ArgMatches) {
@@ -21,7 +20,6 @@ pub fn handle_config(matches: ArgMatches) {
                     1
                 }
             },
-            verbose: matches.occurrences_of("verbose") == 1
         };
         let mut interp = Interpreter::from_config(&cfg);
         interp.run();
@@ -38,7 +36,6 @@ pub fn handle_config(matches: ArgMatches) {
                     1
                 }
             },
-            verbose: matches.occurrences_of("verbose") == 1
         };
         let interp = Interpreter::from_config(&cfg);
         interp.info();

@@ -31,6 +31,10 @@ fn main() {
                 .long("size")
                 .help("Width/Height of a codel, in pixels")
                 .default_value("1"))
+            .arg(Arg::with_name("debug")
+                .short("d")
+                .long("debug")
+                .help("Enter debug mode, where you get to run the program step by step"))
             .about("Interpret and run a Piet image file"))
         .get_matches();
 

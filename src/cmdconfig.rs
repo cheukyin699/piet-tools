@@ -22,7 +22,15 @@ pub fn handle_config(matches: ArgMatches) {
             },
         };
         let mut interp = Interpreter::from_config(&cfg);
-        interp.run();
+
+        if run.is_present("debug") {
+            match interp.debug() {
+                Err(e) => panic!("{}", e),
+                _ => println!("Exiting debugger")
+            }
+        } else {
+            interp.run();
+        }
     } else if let Some(info) = matches.subcommand_matches("info") {
         let cfg = CmdConfig {
             src: match info.value_of("src") {

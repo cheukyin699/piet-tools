@@ -38,7 +38,7 @@ fn switch_codel(c: Direction, times: i32) -> Direction {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum OpCode {
+pub enum OpCode {
     NOP,
     PUSH,
     POP,
@@ -85,12 +85,14 @@ impl OpCode {
 pub struct CPU {
     codel_size: i32,
     code: Blocks,
-    stack: Vec<i32>,
-    dp: Direction,
-    cc: Direction,
-    pc: Coord,
+    pub stack: Vec<i32>,
+    pub dp: Direction,
+    pub cc: Direction,
+    pub pc: Coord,
 
-    error: Option<String>,
+    pub error: Option<String>,
+    pub output: Option<String>,
+    pub last_cmd: Option<OpCode>
 }
 
 impl CPU {
@@ -105,6 +107,8 @@ impl CPU {
                 pc: (0, 0),
 
                 error: None,
+                output: None,
+                last_cmd: None,
             },
             Err(e) => panic!(e),
         }
@@ -156,6 +160,8 @@ Codel size: {}
             None => return false,
         };
 
+        self.error = None;
+        self.output = None;
         let (vblk, vnewblk) = (blk.to_viewableblock(), new_blk.to_viewableblock());
         let success = self.execute_blk(vblk, vnewblk);
         if success {
@@ -172,6 +178,7 @@ Codel size: {}
     ///
     /// This is basically a helper function that deals with the exceptional cases.
     fn execute_blk(&mut self, curr: blocks::ViewableBlock, next: blocks::ViewableBlock) -> bool {
+        self.last_cmd = None;
         match next.t {
             Type::Black => false,
             Type::Color(l, h) => {
@@ -190,7 +197,7 @@ Codel size: {}
     }
 
     fn execute(&mut self, curr: blocks::ViewableBlock, op: OpCode) -> Option<bool> {
-        self.error = None;
+        self.last_cmd = Some(op);
         match op {
             OpCode::NOP => {}
             OpCode::PUSH => {
@@ -347,7 +354,7 @@ Codel size: {}
                     return None;
                 }
                 let n = self.stack.pop()?;
-                print!("{}", n);
+                self.output = Some(n.to_string());
             }
             OpCode::OUTC => {
                 if self.stack.len() < 1 {
@@ -355,7 +362,7 @@ Codel size: {}
                     return None;
                 }
                 let n = self.stack.pop()?;
-                print!("{}", n as u8 as char);
+                self.output = Some((n as u8 as char).to_string());
             }
         }
 

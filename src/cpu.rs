@@ -131,9 +131,7 @@ Codel size: {}
                 break;
             }
 
-            if i % 2 == 0 {
-                self.cc = switch_codel(self.cc, 1);
-            }
+            self.cc = switch_codel(self.cc, 1);
             if i % 2 == 1 {
                 self.dp = rotate_direction(self.dp, 1);
             }
@@ -330,7 +328,7 @@ Codel size: {}
                 let mut line: String = "".to_string();
                 let stdin = io::stdin();
                 match stdin.read_line(&mut line) {
-                    Ok(_) => self.stack.push(match line.parse() {
+                    Ok(_) => self.stack.push(match line.trim().parse() {
                         Ok(num) => num,
                         Err(_) => {
                             self.error = Some(format!("Couldn't parse input '{}'", line));
